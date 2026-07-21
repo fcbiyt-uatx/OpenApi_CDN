@@ -1,12 +1,426 @@
-openapi: 3.0.3
+openapi: 3.0.4
 info:
-  title: API de ThesisFlow
-  description: Documentación colaborativa del equipo
+  title: TesisHub - Content Manager
+  description: |
+    Servidor que resuelve las peticiones de la plataforma de creación de documentos de investigación asistido por IA.
+  contact:
+    email:
+      - 20258114@garzas.uatx.mx
+      - 20258116@garzas.uatx.mx
+      - 20258113@garzas.uatx.mx
+  license:
+    name: Apache 2.0
+    url: "https://www.apache.org/licenses/LICENSE-2.0.html"
   version: 1.0.0
+externalDocs:
+  description: Find out more about Swagger
+  url: "https://swagger.io"
+servers:
+  - description: SwaggerHub API Auto Mocking
+    url: "https://virtserver.swaggerhub.com/uatx-f40/Platform/1.0.0"
+tags:
+  - name: platform
+    description: Platform API
+  - name: content-manager
+    description: Operaciones de gestión de contenido y archivos de proyectos
 paths:
-  /ping:
+  /api/v1/content-manager/downloadProject/{projectId}:
     get:
-      summary: Endpoint de prueba
+      tags:
+        - content-manager
+      summary: Obtiene la ruta de descarga del archivo del proyecto.
+      description: Genera y recupera la URL directa para descargar el archivo comprimido (.zip o .docx) del proyecto especificado.
+      operationId: downloadProject
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: UUID único del proyecto.
+          schema:
+            type: string
+            format: uuid
+            example: b188b863-c79d-4b8c-bc5a-455624a052bb
+        - name: branch
+          in: query
+          required: false
+          description: Nombre de la rama específica. Si se omite, apunta a la rama por defecto.
+          schema:
+            type: string
+            example: "main"
       responses:
         "200":
-          description: OK
+          description: Operación exitosa. Se retorna la URL del archivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadUrlResponse200"
+        "401":
+          description: No autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: El proyecto o la rama especificada no existe.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno al procesar la solicitud de descarga.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/content-manager/downloadCommitArtifact/{projectId}/{branch}/{commitSha}:
+    get:
+      tags:
+        - content-manager
+      summary: Descarga el artefacto original de un commit específico.
+      description: >
+        Recupera la URL temporal de descarga del archivo binario original (.docx o .zip) 
+        almacenado en el bucket externo, correspondiente al hash del commit solicitado dentro de un proyecto y rama específicos.
+      operationId: downloadCommitArtifact
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: UUID único del proyecto/repositorio.
+          schema:
+            type: string
+            format: uuid
+            example: b188b863-c79d-4b8c-bc5a-455624a052bb
+        - name: branch
+          in: path
+          required: true
+          description: Nombre de la rama donde reside el commit.
+          schema:
+            type: string
+            example: "branch_009"
+        - name: commitSha
+          in: path
+          required: true
+          description: El hash SHA-256 o SHA-1 único del commit de Git asociado al artefacto.
+          schema:
+            type: string
+            example: "cefd492173704902694b3f948f29c7db6b017745"
+      responses:
+        "200":
+          description: URL generada exitosamente desde el bucket de almacenamiento.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadUrlResponse200"
+        "401":
+          description: No autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No se encontró ningún artefacto asociado a ese commit en el almacenamiento.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error al conectar con el servidor de almacenamiento de artefactos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/content-manager/newJobSpace:
+    post:
+      tags:
+        - content-manager
+      summary: Crea un nuevo espacio de trabajo.
+      description: "Inicializa un espacio de trabajo para el proyecto de investigación, configurando la plantilla, el asesor y la lista de revisores/editores."
+      operationId: newJobSpace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewJobSpaceRequest"
+      responses:
+        "201":
+          description: Espacio de trabajo creado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewJobSpaceResponse201"
+        "401":
+          description: No autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor al crear el espacio de trabajo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/proposal-change/{projectId}:
+    post:
+      tags:
+        - content-manager
+      summary: Crea una nueva propuesta de cambio.
+      description: Crea una propuesta de cambio y genera una rama remota lista para ser procesada y revisada.
+      operationId: createProposalChange
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: UUID único del proyecto.
+          schema:
+            type: string
+            format: uuid
+            example: b188b863-c79d-4b8c-bc5a-455624a052bb
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalChange"
+      responses:
+        "201":
+          description: Propuesta de cambio creada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalChangeResponse"
+        "401":
+          description: No autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno al crear la propuesta de cambio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/proposal-change/{projectId}/{proposalId}:
+    put:
+      tags:
+        - content-manager
+      summary: Actualiza una propuesta de cambio existente.
+      description: Actualiza el contenido de la rama remota de una propuesta de cambio específica utilizando su ID.
+      operationId: updateProposalChange
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: UUID único del proyecto.
+          schema:
+            type: string
+            format: uuid
+            example: b188b863-c79d-4b8c-bc5a-455624a052bb
+        - name: proposalId
+          in: path
+          required: true
+          description: ID único de la propuesta de cambio a actualizar.
+          schema:
+            type: integer
+            format: int64
+            example: 105
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalChange"
+      responses:
+        "200":
+          description: Propuesta de cambio actualizada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalChangeResponse"
+        "401":
+          description: No autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: La propuesta de cambio no fue encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno al actualizar la propuesta de cambio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/proposal-change/{projectId}/{branchName}:
+    delete:
+      tags:
+        - content-manager
+      summary: Cancela o elimina una propuesta de cambio.
+      description: Elimina de forma lógica o física la rama asociada a una propuesta de cambio específica en el repositorio del proyecto.
+      operationId: deleteProposalChange
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: UUID único del proyecto.
+          schema:
+            type: string
+            format: uuid
+            example: b188b863-c79d-4b8c-bc5a-455624a052bb
+        - name: branchName
+          in: path
+          required: true
+          description: Nombre de la rama (branch) asociada a la propuesta de cambio que se desea eliminar.
+          schema:
+            type: string
+            example: "branch_009"
+      responses:
+        "200":
+          description: Propuesta de cambio eliminada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse200"
+        "401":
+          description: No autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor al intentar cancelar la propuesta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    DownloadUrlResponse200:
+      type: object
+      required:
+        - filePath
+      properties:
+        filePath:
+          type: string
+          format: uri
+          example: "https://www.uatx.mx/files/doc2938492384ueowhdjbn"
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Ocurrió un error inesperado al procesar el archivo del proyecto.
+    NewJobSpaceRequest:
+      type: object
+      required:
+        - title
+        - idPlantilla
+        - descPlantilla
+        - nombreAsesor
+        - reviewers
+      properties:
+        title:
+          type: string
+          example: Versionamiento en git
+        idPlantilla:
+          type: integer
+          example: 1
+        descPlantilla:
+          type: string
+          example: Tesis Maestría
+    NewJobSpaceResponse201:
+      type: object
+      required:
+        - object
+      properties:
+        object:
+          $ref: "#/components/schemas/JobSpaceData"
+    JobSpaceData:
+      type: object
+      required:
+        - projectId
+        - shaFirstCommit
+        - repositoryUrl
+        - title
+      properties:
+        projectId:
+          type: integer
+          example: 2
+        shaFirstCommit:
+          type: string
+          example: cefd492173704902694b3f948f29c7db6b017745
+        repositoryUrl:
+          type: string
+          format: uri
+          example: "http://192.168.100.239/root/2"
+        title:
+          type: string
+          example: Tesis Maestría
+    DeleteResponse200:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: deleted
+    Schema:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+    ProposalChange:
+      type: object
+      title: ProposalChange
+      description: Proposal change schema model
+      properties:
+        id:
+          type: integer
+          format: int64
+        title:
+          type: string
+          x-stoplight:
+            id: s4boiqb1c299e
+        description:
+          type: string
+          x-stoplight:
+            id: x61l419s5uk89
+          nullable: true
+        files:
+          type: string
+          x-stoplight:
+            id: wuh0oar521p9q
+        branch:
+          type: string
+          x-stoplight:
+            id: hdrxldgfuhfyv
+    ProposalChangeResponse:
+      type: object
+      title: ProposalChangeResponse
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch:
+          type: string
+          x-stoplight:
+            id: td3wal6f062jd
+        commit:
+          type: string
+          x-stoplight:
+            id: m4bwyhru0hhsu
